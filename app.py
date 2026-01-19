@@ -26,41 +26,40 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Application Title
-st.title("🧪 The Experimentation Decision Engine (V1)")
+st.title("🧪 The Experimentation Decision Engine")
 st.markdown("*Simulating hostile environments to train decision making.*")
 
 # --- SIDEBAR: INPUTS ---
-# --- SIDEBAR: INPUTS ---
 with st.sidebar:
-    st.header("🎛️ Experiment Setup")
+    st.header("🎛️ Configuration")
     
     # Section 1: Parameters
-    st.subheader("1. parameters")
-    n_users = st.slider("Total Users", min_value=1000, max_value=50000, value=10000, step=1000)
+    st.subheader("Simulation Parameters")
+    n_users = st.slider("Traffic Volume", min_value=1000, max_value=50000, value=10000, step=1000)
     baseline_rate = st.slider("Baseline Conversion Rate (%)", 1.0, 50.0, 12.0, 0.5) / 100.0
     lift_percent = st.slider("Expected Lift (%)", -20.0, 50.0, 10.0, 1.0)
     lift = lift_percent / 100.0
     
     st.divider()
     
-    # Section 1.5: V2 Advanced Config
-    st.subheader("1.5 Advanced Config (V2)")
+    # Section 1.5: Advanced Config
+    st.subheader("Advanced Settings")
     metric_type = st.radio("Primary Metric", ["Conversion Rate", "Revenue (RPV)"])
     if metric_type == "Revenue (RPV)":
         aov = st.number_input("Average Order Value ($)", value=50.0)
-        variance = st.slider("Variance (Lognormal Sigma)", 0.1, 2.0, 1.0, help="Higher = More skew/outliers")
+        variance = st.slider("Variance (Lognormal Sigma)", 0.1, 2.0, 1.0, help="Controls the skew of the revenue distribution.")
     else:
         aov = 50.0
         variance = 1.0
         
-    analysis_type = st.radio("Analysis Mode", ["Fixed Horizon", "Sequential Testing"])
+    analysis_type = st.radio("Inference Framework", ["Fixed Horizon", "Sequential Testing"])
     
     st.divider()
     
     # Section 2: Chaos Mode
-    st.subheader("2. Chaos Mode ( The Juice )")
-    inject_srm = st.toggle("Inject SRM (Sample Ratio Mismatch)", value=False, help="Breaks the 50/50 randomization.")
-    inject_simpson = st.toggle("Inject Simpson's Bias", value=False, help="Inverts trends between Device segments vs Global.")
+    st.subheader("Stress Testing (Chaos)")
+    inject_srm = st.toggle("Simulate SRM (Sample Ratio Mismatch)", value=False, help="Artificially biases the traffic allocation (e.g., 30/70 split).")
+    inject_simpson = st.toggle("Simulate Simpson's Paradox", value=False, help="Inverts segment-level performance vs global performance.")
 
     st.divider()
     
@@ -101,29 +100,31 @@ if st.session_state['run']:
         val_label = "$"
     
     # --- ZONE 1: HEALTH CHECK (SRM) ---
-    st.header("1. Health Check & Validation")
+    st.header("1. Data Integrity & Health")
     
     col_health1, col_health2 = st.columns([1, 3])
     
     with col_health1:
         if srm_res['srm_detected']:
             st.error(f"❌ SRM DETECTED (p={srm_res['p_value']:.4f})")
-            st.markdown("**CRITICAL:** The sample ratio is flawed. Results are invalid.")
+            st.markdown("**CRITICAL:** Traffic allocation is biased. Results are statistically invalid.")
         else:
             st.success(f"✅ Sample Ratio Valid (p={srm_res['p_value']:.4f})")
             
     with col_health2:
-        if n_users < 2000:
-             st.warning("⚠️ Low Sample Size. False Positives risk increased.")
-        elif freq_res['significant'] and not srm_res['srm_detected']:
-             st.info("💡 Statistically Significant Result found.")
+        if srm_res['srm_detected']:
+             st.warning("⚠️ **Warning:** Sample ratio mismatch prevents reliable analysis. Investigate traffic allocation.")
+        elif n_users < 2000:
+             st.warning("⚠️ Low Sample Size. Increased risk of false positives/negatives.")
+        elif freq_res['significant']:
+             st.info("💡 Statistically Significant Result observed.")
         else:
-             st.markdown("Experiment looks technically sound (or insufficient data). Proceed to Analysis.")
+             st.markdown("Experiment design appears sound. Proceeding to detailed analysis.")
 
     st.divider()
 
     # --- ZONE 2: EXECUTIVE RESULTS ---
-    st.header("2. Executive Results")
+    st.header("2. Performance Overview")
     
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
     
@@ -143,7 +144,7 @@ if st.session_state['run']:
                 f"{(1 - freq_res['p_value']) * 100:.2f}%",
                 help=f"P-value: {freq_res['p_value']:.4f}")
     
-    kpi3.metric("Prob. B is Best (Bayesian)", f"{bayes_res['prob_b_wins']*100:.2f}%",
+    kpi3.metric("Prob. B is Better (Bayesian)", f"{bayes_res['prob_b_wins']*100:.2f}%",
                 help=f"Expected Loss: {bayes_res['expected_loss']:.4f}")
     
     kpi4.metric(f"Avg {metric_type}", f"{val_b:.2f}{val_label}", f"vs A: {val_a:.2f}{val_label}")
@@ -151,9 +152,9 @@ if st.session_state['run']:
     st.divider()
 
     # --- ZONE 3: VISUALIZATION ---
-    st.header("3. Visual Insights")
+    st.header("3. Analytical Insights")
     
-    tab1, tab2, tab3 = st.tabs(["📈 Time & Cumulative", "🔔 Distributions / Posteriors", "🚦 Sequential Analysis"])
+    tab1, tab2, tab3 = st.tabs(["📈 Cumulative Trend", "🔔 Posterior Distributions", "🚦 Sequential Analysis"])
     
     with tab1:
         # Prepare Time Series Data
@@ -169,8 +170,8 @@ if st.session_state['run']:
         daily['cum_metric'] = daily['cum_value'] / daily['cum_users']
         
         fig_ts = px.line(daily, x='day_index', y='cum_metric', color='group', 
-                         title=f'Cumulative {metric_type} over Time',
-                         labels={'cum_metric': metric_type, 'day_index': 'Day'},
+                         title=f'Cumulative {metric_type} Evolution',
+                         labels={'cum_metric': metric_type, 'day_index': 'Day of Experiment'},
                          markers=True)
         st.plotly_chart(fig_ts, use_container_width=True)
         
@@ -184,80 +185,63 @@ if st.session_state['run']:
             fig_dist = go.Figure()
             fig_dist.add_trace(go.Scatter(x=x, y=y_a, mode='lines', name='Group A', fill='tozeroy'))
             fig_dist.add_trace(go.Scatter(x=x, y=y_b, mode='lines', name='Group B', fill='tozeroy'))
-            fig_dist.update_layout(title="Posterior Distributions (Beta)", xaxis_title="Conversion Rate")
+            fig_dist.update_layout(title="Posterior Belief Distributions (Beta)", xaxis_title="Conversion Rate")
         else:
             # Bootstrap Histograms
             fig_dist = go.Figure()
             fig_dist.add_trace(go.Histogram(x=bayes_res['samples_a'], name='A (Bootstrap)', opacity=0.7))
             fig_dist.add_trace(go.Histogram(x=bayes_res['samples_b'], name='B (Bootstrap)', opacity=0.7))
-            fig_dist.update_layout(title="Bootstrap distributions of Mean RPV", barmode='overlay')
+            fig_dist.update_layout(title="Bootstrap Evaluation of Mean RPV", barmode='overlay')
             
         st.plotly_chart(fig_dist, use_container_width=True)
 
     with tab3:
         if analysis_type == "Sequential Testing":
-            st.markdown("### Sequential Testing (O'Brien-Fleming Boundaries)")
-            st.markdown("Unlike Fixed Horizon, this lets you 'peek' every day. The boundaries tighten as more data comes in.")
+            st.markdown("### Sequential Analysis (O'Brien-Fleming)")
+            st.markdown("Dynamic decision boundaries that allow continuous monitoring while controlling Type I error.")
             
             # Reconstruct Z-Score path
-            # We need to calculate cumulative Z-Scores day be day
             days = sorted(df['day_index'].unique())
-            z_path = []
-            bounds = []
-            
-            cum_n = 0
+            day_data = []
             n_total = len(df)
             
-            # This is an approximation loop for viz purposes
-            # Ideally we recalculate frequentist test on cumulative data
-            cum_df = daily.pivot(index='day_index', columns='group', values=['users', 'converted', 'revenue'])
-            # Need to flatten or handle structure carefully
-            
-            # Easier: Just re-run checks cumulatively
-            day_data = []
             for d in days:
                 sub_df = df[df['day_index'] <= d]
                 check = freq.analyze_conversion(sub_df) if metric_key == 'conversion' else freq.analyze_revenue(sub_df)
-                
                 n_curr = len(sub_df)
                 
-                # Z-Score (re-derived from p-value if needed, or using norm.ppf)
-                # t-stat is in check for revenue.
-                # let's approximate Z from p-value for uniform visualization:
-                # signed z?
                 p = check['p_value']
-                z = stats.norm.ppf(1 - p/2) # two-sided
+                z = stats.norm.ppf(1 - p/2) # two-sided approximation
                 if check['lift'] < 0: z = -z
                 
                 bound = freq.get_sequential_boundary(n_curr, n_total)
-                
-                day_data.append({'day': d, 'z_score': z, 'boundary': bound, 'users': n_curr})
+                day_data.append({'day': d, 'z_score': z, 'boundary': bound})
             
             seq_df = pd.DataFrame(day_data)
             
             fig_seq = go.Figure()
-            fig_seq.add_trace(go.Scatter(x=seq_df['day'], y=seq_df['z_score'], mode='lines+markers', name='Z-Score Observed'))
-            fig_seq.add_trace(go.Scatter(x=seq_df['day'], y=seq_df['boundary'], mode='lines', name='Upper Bound', line=dict(dash='dash', color='red')))
-            fig_seq.add_trace(go.Scatter(x=seq_df['day'], y=-seq_df['boundary'], mode='lines', name='Lower Bound', line=dict(dash='dash', color='red')))
+            fig_seq.add_trace(go.Scatter(x=seq_df['day'], y=seq_df['z_score'], mode='lines+markers', name='Test Statistic (Z)'))
+            fig_seq.add_trace(go.Scatter(x=seq_df['day'], y=seq_df['boundary'], mode='lines', name='Upper Boundary', line=dict(dash='dash', color='red')))
+            fig_seq.add_trace(go.Scatter(x=seq_df['day'], y=-seq_df['boundary'], mode='lines', name='Lower Boundary', line=dict(dash='dash', color='red')))
             
             # Add Fill for Decision Zone
-            fig_seq.add_hrect(y0=-1.96, y1=1.96, annotation_text="Fixed Horizon Significance (Z=1.96)", annotation_position="top left", fillcolor="yellow", opacity=0.1, line_width=0)
+            fig_seq.add_hrect(y0=-1.96, y1=1.96, annotation_text="Standard Significance Zone (Z=1.96)", annotation_position="top left", fillcolor="yellow", opacity=0.1, line_width=0)
             
-            fig_seq.update_layout(title="Sequential Test Path", xaxis_title="Day", yaxis_title="Z-Score / T-Statistic")
+            fig_seq.update_layout(title="Sequential Test Trajectory", xaxis_title="Day", yaxis_title="Z-Score")
             st.plotly_chart(fig_seq, use_container_width=True)
             
             # Decision
             last_day = seq_df.iloc[-1]
             if abs(last_day['z_score']) > last_day['boundary']:
-                st.success(f"🎉 STOP TEST! Significant Result found at Day {int(last_day['day'])}")
+                st.success(f"✅ **Statistical Significance Reached:** Stopping criterion met at Day {int(last_day['day'])}.")
             else:
-                st.info("✋ KEEP RUNNING. No boundary crossed yet.")
+                st.info("⏳ **Status:** Insufficient evidence to reject null hypothesis. Continue testing.")
 
         else:
-            st.warning("Select 'Sequential Testing' in the Sidebar to see this analysis.")
+            st.warning("Enable 'Sequential Testing' in the configuration panel to view this analysis.")
 
     # --- ZONE 4: SEGMENTATION (The Detective) ---
-    st.header("4. Segmentation (Simpson's Check)")
+    st.header("4. Segmentation & Bias Detection")
     
     # Calculate Segmented Stats
     seg_stats = df.groupby(['device', 'group'])[metric_col].mean().reset_index()
@@ -268,11 +252,11 @@ if st.session_state['run']:
     
     with col_seg1:
         fig_seg = px.bar(seg_stats, x='device', y='metric_val', color='group', barmode='group',
-                         title=f"{metric_type} by Device", text_auto='.2f')
+                         title=f"{metric_type} by Segment", text_auto='.2f')
         st.plotly_chart(fig_seg, use_container_width=True)
         
     with col_seg2:
-        st.info("ℹ️ **Simpson's Paradox:** Look for cases where the Global Winner is different from the Segment Winners.")
+        st.info("ℹ️ **Consistency Check:** Analyzing if aggregate results align with segment-level performance (Simpson's Paradox).")
         
         # Check logic for Simpson's warning in UI
         desktop = seg_stats[seg_stats['device'] == 'Desktop']
@@ -293,14 +277,14 @@ if st.session_state['run']:
             global_win = 'B' if global_mean_b > global_mean_a else 'A'
             
             if d_win == m_win and d_win != global_win:
-                st.error("🚨 **SIMPSON'S PARADOX DETECTED!**")
-                st.markdown(f"Winner by Device: **{d_win}**")
-                st.markdown(f"Global Winner: **{global_win}**")
-                st.markdown("The global result is misleading due to traffic mix!")
+                st.error("🚨 **SIMPSON'S PARADOX DETECTED**")
+                st.markdown(f"Segment Trend: **{d_win}** is superior.")
+                st.markdown(f"Aggregate Trend: **{global_win}** appears superior.")
+                st.markdown("⚠️ **Conclusion:** Aggregate results are misleading due to traffic mix bias. Rely on segment data.")
             else:
-                 st.markdown(f"Winner by Device: **{d_win}** (D), **{m_win}** (M)")
+                 st.markdown(f"Segment Winner: **{d_win}** (D), **{m_win}** (M)")
                  st.markdown(f"Global Winner: **{global_win}**")
 
 else:
-    st.info("👈 Set your parameters and click 'Run Simulation' to start.")
+    st.info("👈 Configure parameters and click 'Run Simulation' to begin.")
 
