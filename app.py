@@ -104,8 +104,8 @@ if st.session_state['run']:
     
     winner_color = "normal"
     if freq_res['significant']:
-        if obs_lift > 0: winner_color = "g" # Green
-        else: winner_color = "r" # Red
+        if obs_lift > 0: winner_color = "green" # Green
+        else: winner_color = "red" # Red
         
     kpi1.metric("Observed Lift", f"{obs_lift*100:.2f}%", 
                 delta=f"{obs_lift*100:.2f} pts" if obs_lift != 0 else None,
