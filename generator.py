@@ -8,7 +8,8 @@ class SimulationGenerator:
     (SRM, Simpson's Paradox).
     """
 
-    def generate_data(self, n_users, baseline_rate, lift, inject_srm=False, inject_simpson=False):
+    def generate_data(self, n_users, baseline_rate, lift, inject_srm=False, inject_simpson=False, 
+                     metric_type='conversion', aov=50.0, variance=1.0):
         """
         Generates a DataFrame with user data.
         
@@ -18,9 +19,12 @@ class SimulationGenerator:
             lift (float): Relative lift for the treatment group (e.g., 0.10 for +10%).
             inject_srm (bool): If True, introduces Sample Ratio Mismatch (30/70 split).
             inject_simpson (bool): If True, introduces Simpson's Paradox via 'device' variable.
+            metric_type (str): 'conversion' or 'revenue'.
+            aov (float): Average Order Value (for Revenue metric).
+            variance (float): Variance parameter for Lognormal distribution (Sigma).
             
         Returns:
-            pd.DataFrame: Columns [user_id, group, device, converted, day_index]
+            pd.DataFrame: Columns [user_id, group, device, converted, revenue, day_index]
         """
         
         # 1. Assign Groups
@@ -54,16 +58,10 @@ class SimulationGenerator:
             df.loc[~is_a, 'device'] = np.random.choice(['Desktop', 'Mobile'], size=(~is_a).sum(), p=[0.2, 0.8])
             
             # Define Base Rates per Device (Desktop converts 3x better than Mobile)
-            # Center the rates around the provided baseline somewhat, roughly.
-            # Let's say Mobile is Base, Desktop is Base * 3.
-            # Actually, let's derive them so weights make sense? 
-            # Simplification: Desktop = 20%, Mobile = 5% (adjusted by baseline scaling)
-            
             base_mobile = baseline_rate * 0.5
             base_desktop = baseline_rate * 1.5
             
-            # Apply Lift to B (Treatment)
-            # B is better than A by 'lift' % within each device
+            # Apply Lift to B (Treatment) - Lift applies to PROBABILITY OF CONVERSION
             metrics = {
                 'A_Desktop': base_desktop,
                 'A_Mobile': base_mobile,
@@ -77,16 +75,12 @@ class SimulationGenerator:
             
             metrics = {
                 'A_Desktop': baseline_rate,
-                'A_Mobile': baseline_rate, # Simplified: device doesn't matter by default or same
+                'A_Mobile': baseline_rate, 
                 'B_Desktop': baseline_rate * (1 + lift),
                 'B_Mobile': baseline_rate * (1 + lift)
             }
-            # Actually better to have natural device difference even in normal case?
-            # User spec: "Simpson's Paradox: If activado, invierte los pesos... Normal: ??" 
-            # We'll stick to simple uniform baseline for Normal to isolate variables.
         
-        # 3. determine Conversion
-        # Vectorized probability assignment
+        # 3. Determine Conversion
         conditions = [
             (df['group'] == 'A') & (df['device'] == 'Desktop'),
             (df['group'] == 'A') & (df['device'] == 'Mobile'),
@@ -108,5 +102,29 @@ class SimulationGenerator:
         random_draws = np.random.rand(n_users)
         df['converted'] = (random_draws < df['prob']).astype(int)
         
-        # Cleanup
-        return df[['user_id', 'group', 'device', 'converted', 'day_index']]
+        # 4. Generate Revenue (Zero-Inflated Lognormal)
+        df['revenue'] = 0.0
+        
+        if metric_type == 'revenue':
+            # Only converted users spend money
+            converted_mask = df['converted'] == 1
+            n_conv = converted_mask.sum()
+            
+            if n_conv > 0:
+                # Lognormal parameters:
+                # mu = ln(mean) - 0.5 * sigma^2
+                # We want the mean of the distribution to match the desired AOV
+                sigma = variance # This controls the "skew" or "fat tail"
+                mu = np.log(aov) - 0.5 * sigma**2
+                
+                # Generate spend
+                spend = np.random.lognormal(mean=mu, sigma=sigma, size=n_conv)
+                df.loc[converted_mask, 'revenue'] = spend
+                
+                # Apply Lift to Revenue Value as well? 
+                # PROMPT SAYS: Lift applies to Bernouilli params. But usually B might improve AOV too.
+                # For V2 simplicity: Lift is on Conversion Rate. AOV is constant between groups unless specified.
+                # If we want Lift on Revenue itself (RPV), increasing CR increases RPV automatically.
+                # Let's keep AOV same for A and B for now to isolate CR impact on Revenue.
+
+        return df[['user_id', 'group', 'device', 'converted', 'revenue', 'day_index']]
